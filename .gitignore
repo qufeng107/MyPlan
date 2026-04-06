@@ -143,6 +143,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+credentials_google.json
+google_token.json
 
 # Spyder project settings
 .spyderproject

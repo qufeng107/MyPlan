@@ -1,0 +1,86 @@
+[
+  {
+    "page_id": "33962ca4-3448-8053-9271-cecc62f37b9f",
+    "title": "New Renting",
+    "old_next_date": "2026-04-05T22:00:00+01:00",
+    "new_next_date": "2026-04-05T22:00:00+01:00",
+    "effective_repeat_type": "Daily",
+    "reason": "daily recurrence",
+    "warnings": [],
+    "blocked_by_leave": false,
+    "blocked_by_holiday": false,
+    "used_holiday_date": null
+  },
+  {
+    "page_id": "33962ca4-3448-8054-a0db-cad6335904d0",
+    "title": "test",
+    "old_next_date": "2026-04-06T09:00:00+01:00",
+    "new_next_date": null,
+    "effective_repeat_type": "Monthly",
+    "reason": "status=Finished stops scheduling",
+    "warnings": [],
+    "blocked_by_leave": false,
+    "blocked_by_holiday": false,
+    "used_holiday_date": null
+  },
+  {
+    "page_id": "33962ca4-3448-8091-b114-f1d42269db3f",
+    "title": "test (5)",
+    "old_next_date": "2026-04-06T09:00:00+01:00",
+    "new_next_date": "2026-04-07T09:00:00+01:00",
+    "effective_repeat_type": "Weekly",
+    "reason": "weekly recurrence",
+    "warnings": [],
+    "blocked_by_leave": false,
+    "blocked_by_holiday": false,
+    "used_holiday_date": null
+  },
+  {
+    "page_id": "33962ca4-3448-8096-9981-ecc4ecd40f75",
+    "title": "test (2)",
+    "old_next_date": "2026-04-06T09:00:00+01:00",
+    "new_next_date": null,
+    "effective_repeat_type": "Weekdays",
+    "reason": "status=Finished stops scheduling",
+    "warnings": [],
+    "blocked_by_leave": false,
+    "blocked_by_holiday": false,
+    "used_holiday_date": null
+  },
+  {
+    "page_id": "33962ca4-3448-80c4-ba8b-faf9a8e2f144",
+    "title": "test (1)",
+    "old_next_date": "2026-04-06T09:00:00+01:00",
+    "new_next_date": "2026-04-06T09:00:00+01:00",
+    "effective_repeat_type": "Once",
+    "reason": "single occurrence uses Start Date",
+    "warnings": [],
+    "blocked_by_leave": false,
+    "blocked_by_holiday": false,
+    "used_holiday_date": null
+  },
+  {
+    "page_id": "33962ca4-3448-80c7-8098-f4ebe271d0b1",
+    "title": "test (3)",
+    "old_next_date": "2026-04-06T09:00:00+01:00",
+    "new_next_date": "2026-04-06T09:00:00+01:00",
+    "effective_repeat_type": "Weekly",
+    "reason": "weekly recurrence",
+    "warnings": [],
+    "blocked_by_leave": false,
+    "blocked_by_holiday": false,
+    "used_holiday_date": null
+  },
+  {
+    "page_id": "33962ca4-3448-80df-a0aa-c7c45fcb0e46",
+    "title": "test (4)",
+    "old_next_date": "2026-04-06T09:00:00+01:00",
+    "new_next_date": null,
+    "effective_repeat_type": "Holidays",
+    "reason": "status=Cancelled stops scheduling",
+    "warnings": [],
+    "blocked_by_leave": false,
+    "blocked_by_holiday": false,
+    "used_holiday_date": null
+  }
+]

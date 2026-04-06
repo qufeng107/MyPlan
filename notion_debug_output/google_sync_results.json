@@ -1,0 +1,65 @@
+[
+  {
+    "page_id": "33962ca4-3448-8053-9271-cecc62f37b9f",
+    "title": "New Renting",
+    "action": "create",
+    "google_event_id": "grhmrqmveng666kfp37t9h7i9c",
+    "reason": "created new event",
+    "sync_hash": "c67ba27f98a05ea2b05be21b46258867916c1ed5a7e775d446f69bfee22e158c",
+    "warnings": []
+  },
+  {
+    "page_id": "33962ca4-3448-8054-a0db-cad6335904d0",
+    "title": "test",
+    "action": "skip",
+    "google_event_id": null,
+    "reason": "SyncToGoogle is false",
+    "sync_hash": null,
+    "warnings": []
+  },
+  {
+    "page_id": "33962ca4-3448-8091-b114-f1d42269db3f",
+    "title": "test (5)",
+    "action": "skip",
+    "google_event_id": null,
+    "reason": "SyncToGoogle is false",
+    "sync_hash": null,
+    "warnings": []
+  },
+  {
+    "page_id": "33962ca4-3448-8096-9981-ecc4ecd40f75",
+    "title": "test (2)",
+    "action": "skip",
+    "google_event_id": null,
+    "reason": "SyncToGoogle is false",
+    "sync_hash": null,
+    "warnings": []
+  },
+  {
+    "page_id": "33962ca4-3448-80c4-ba8b-faf9a8e2f144",
+    "title": "test (1)",
+    "action": "skip",
+    "google_event_id": null,
+    "reason": "SyncToGoogle is false",
+    "sync_hash": null,
+    "warnings": []
+  },
+  {
+    "page_id": "33962ca4-3448-80c7-8098-f4ebe271d0b1",
+    "title": "test (3)",
+    "action": "skip",
+    "google_event_id": null,
+    "reason": "SyncToGoogle is false",
+    "sync_hash": null,
+    "warnings": []
+  },
+  {
+    "page_id": "33962ca4-3448-80df-a0aa-c7c45fcb0e46",
+    "title": "test (4)",
+    "action": "skip",
+    "google_event_id": null,
+    "reason": "SyncToGoogle is false",
+    "sync_hash": null,
+    "warnings": []
+  }
+]

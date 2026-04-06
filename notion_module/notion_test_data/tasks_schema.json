@@ -1,0 +1,74 @@
+{
+  "Records": {
+    "type": "rich_text"
+  },
+  "Description": {
+    "type": "rich_text"
+  },
+  "GoogleEventId": {
+    "type": "rich_text"
+  },
+  "Status": {
+    "type": "select",
+    "options": [
+      "Ongoing",
+      "Pending",
+      "Finished",
+      "Cancelled"
+    ]
+  },
+  "ReminderMin": {
+    "type": "number"
+  },
+  "Start Date": {
+    "type": "date"
+  },
+  "LastSyncedAt": {
+    "type": "date"
+  },
+  "Repeat": {
+    "type": "multi_select",
+    "options": [
+      "Sameday",
+      "Sun",
+      "Sat",
+      "Fri",
+      "Thu",
+      "Wed",
+      "Tue",
+      "Mon"
+    ]
+  },
+  "Timezone": {
+    "type": "select",
+    "options": [
+      "Europe/London"
+    ]
+  },
+  "SyncToGoogle": {
+    "type": "checkbox"
+  },
+  "Next Date": {
+    "type": "date"
+  },
+  "Topic": {
+    "type": "relation"
+  },
+  "Repeat Type": {
+    "type": "multi_select",
+    "options": [
+      "Once",
+      "Daily",
+      "Weekly",
+      "Monthly",
+      "Weekdays",
+      "Holidays"
+    ]
+  },
+  "Duration (mins)": {
+    "type": "number"
+  },
+  "Title": {
+    "type": "title"
+  }
+}

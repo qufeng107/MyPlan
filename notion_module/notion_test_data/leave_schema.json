@@ -1,0 +1,21 @@
+{
+  "Type": {
+    "type": "select",
+    "options": []
+  },
+  "End Date": {
+    "type": "date"
+  },
+  "Start Date": {
+    "type": "date"
+  },
+  "AffectsScheduling": {
+    "type": "checkbox"
+  },
+  "Notes": {
+    "type": "rich_text"
+  },
+  "Title": {
+    "type": "title"
+  }
+}
