@@ -8,15 +8,17 @@ from typing import Any, Optional
 
 from googleapiclient.errors import HttpError
 
+from ..google_calendar_client import GoogleCalendarClient
 from ..models import Task
 from ..reader import MyPlanNotionReader
 from ..writer import MyPlanNotionWriter
-from ..google_calendar_client import GoogleCalendarClient
 
 ACTIVE_STATUSES = {"Pending", "Ongoing"}
-INACTIVE_STATUSES = {"Finished", "Cancelled"}
+DELETE_STATUSES = {"Cancelled"}
+KEEP_HISTORY_STATUSES = {"Finished"}
 MANAGED_SOURCE = "MyPlan"
 SYNC_STRATEGY = "rolling_single_event"
+SYNC_HASH_VERSION = "v2"
 
 
 @dataclass
@@ -69,8 +71,23 @@ class TaskGoogleSyncer:
         return "\n\n".join(x for x in parts if x).strip()
 
     @staticmethod
-    def _compute_sync_hash(task: Task, start: datetime) -> str:
+    def _build_reminders(task: Task) -> dict[str, Any]:
+        if task.reminder_min is None:
+            return {"useDefault": True}
+
+        try:
+            reminder_min = max(int(task.reminder_min), 0)
+        except Exception:
+            reminder_min = 0
+
+        return {
+            "useDefault": False,
+            "overrides": [{"method": "popup", "minutes": reminder_min}],
+        }
+
+    def _compute_sync_hash(self, task: Task, start: datetime) -> str:
         payload = {
+            "sync_hash_version": SYNC_HASH_VERSION,
             "title": task.title,
             "description": task.description,
             "topic_titles": task.topic_titles,
@@ -81,6 +98,7 @@ class TaskGoogleSyncer:
             "repeat_values": task.repeat_values,
             "status": task.status,
             "reminder_min": task.reminder_min,
+            "reminders": self._build_reminders(task),
             "sync_to_google": task.sync_to_google,
         }
         raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
@@ -115,14 +133,8 @@ class TaskGoogleSyncer:
                     "repeat_type": task.repeat_type or "Once",
                 }
             },
+            "reminders": self._build_reminders(task),
         }
-
-        reminder_min = int(task.reminder_min) if task.reminder_min is not None else None
-        if reminder_min is not None and reminder_min >= 0:
-            body["reminders"] = {
-                "useDefault": False,
-                "overrides": [{"method": "popup", "minutes": reminder_min}],
-            }
         return body
 
     @staticmethod
@@ -142,8 +154,10 @@ class TaskGoogleSyncer:
             return False, "archived or in trash"
         if not task.sync_to_google:
             return False, "SyncToGoogle is false"
-        if task.status in INACTIVE_STATUSES:
-            return False, f"inactive status={task.status}"
+        if task.status in KEEP_HISTORY_STATUSES:
+            return False, f"keep history status={task.status}"
+        if task.status in DELETE_STATUSES:
+            return False, f"delete status={task.status}"
         if task.status not in ACTIVE_STATUSES:
             return False, f"unsupported status={task.status}"
         if cls._effective_start(task) is None:
@@ -205,6 +219,7 @@ class TaskGoogleSyncer:
 
         desired_page_ids: set[str] = set()
         used_event_ids: set[str] = set()
+        protected_history_page_ids: set[str] = set()
 
         for task in snapshot.tasks:
             desired, desired_reason = self._is_desired_task(task)
@@ -224,9 +239,44 @@ class TaskGoogleSyncer:
 
             warnings = list(task.warnings)
             if len(page_events) > 1:
-                warnings.append(f"found {len(page_events)} managed Google events for the same Notion task")
+                warnings.append(
+                    f"found {len(page_events)} managed Google events for the same Notion task"
+                )
 
             if not desired:
+                if desired_reason.startswith("keep history status="):
+                    protected_history_page_ids.add(task.page_id)
+                    if existing_event:
+                        used_event_ids.add(existing_event["id"])
+                        if commit and task.google_event_id != existing_event.get("id"):
+                            self.notion_writer.update_task_sync_state(
+                                task.page_id,
+                                google_event_id=existing_event.get("id") or "",
+                                last_synced_at=task.last_synced_at,
+                            )
+                        results.append(
+                            SyncResult(
+                                page_id=task.page_id,
+                                title=task.title,
+                                action="keep_history",
+                                google_event_id=existing_event.get("id"),
+                                reason="finished task kept in Google Calendar as history",
+                                warnings=warnings,
+                            )
+                        )
+                    else:
+                        results.append(
+                            SyncResult(
+                                page_id=task.page_id,
+                                title=task.title,
+                                action="skip",
+                                google_event_id=task.google_event_id or None,
+                                reason="finished task has no Google event; nothing to preserve",
+                                warnings=warnings,
+                            )
+                        )
+                    continue
+
                 if existing_event and (delete_inactive or desired_reason == "SyncToGoogle is false"):
                     if commit:
                         self._delete_google_event_if_exists(existing_event["id"])
@@ -268,7 +318,9 @@ class TaskGoogleSyncer:
                             page_id=task.page_id,
                             title=task.title,
                             action="skip",
-                            google_event_id=(existing_event or {}).get("id") if existing_event else (task.google_event_id or None),
+                            google_event_id=(existing_event or {}).get("id")
+                            if existing_event
+                            else (task.google_event_id or None),
                             reason=desired_reason,
                             warnings=warnings,
                         )
@@ -277,7 +329,9 @@ class TaskGoogleSyncer:
 
             desired_page_ids.add(task.page_id)
             event_body = self._build_event_body(task)
-            new_hash = self._existing_sync_hash({"extendedProperties": event_body.get("extendedProperties", {})})
+            new_hash = self._existing_sync_hash(
+                {"extendedProperties": event_body.get("extendedProperties", {})}
+            )
 
             if existing_event:
                 used_event_ids.add(existing_event["id"])
@@ -360,6 +414,8 @@ class TaskGoogleSyncer:
                 if not event_id or event_id in used_event_ids:
                     continue
                 page_id = self._event_private_props(event).get("notion_page_id")
+                if page_id in protected_history_page_ids:
+                    continue
                 if page_id in desired_page_ids:
                     if commit:
                         self._delete_google_event_if_exists(event_id)
