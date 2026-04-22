@@ -4,6 +4,7 @@ import argparse
 import json
 
 from . import MyPlanNotionReader, MyPlanNotionWriter, NotionClient, load_env_config
+from .cli.sync_pipeline import _auto_finish_tasks_by_start_date_end
 from .google_calendar_client import GoogleCalendarClient, load_google_env_config
 from .services.google_sync_service import TaskGoogleSyncer
 
@@ -24,6 +25,16 @@ def main() -> None:
     notion_reader = MyPlanNotionReader(notion_client)
     notion_writer = MyPlanNotionWriter(notion_client)
     google_client = GoogleCalendarClient(google_env)
+
+    snapshot = notion_reader.read_snapshot()
+    auto_finished_count = _auto_finish_tasks_by_start_date_end(
+        tasks=snapshot.tasks,
+        default_timezone=snapshot.default_timezone,
+        notion_writer=notion_writer,
+        commit=args.commit,
+        now=None,
+    )
+    print(f"Auto-finished rows by Start Date end: {auto_finished_count}")
 
     syncer = TaskGoogleSyncer(notion_reader, notion_writer, google_client)
     results = syncer.sync_tasks(

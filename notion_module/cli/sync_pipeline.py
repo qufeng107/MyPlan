@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Optional
+from zoneinfo import ZoneInfo
 
-from .. import NextDateCalculator, NotionClient, MyPlanNotionReader, MyPlanNotionWriter, load_env_config
+from .. import NextDateCalculator, NotionClient, MyPlanNotionReader, MyPlanNotionWriter, Task, load_env_config
 from ..google_calendar_client import GoogleCalendarClient, load_google_env_config
 from ..services.google_sync_service import TaskGoogleSyncer
+
+
+AUTO_FINISH_SOURCE_STATUSES = {"Pending", "Ongoing"}
 
 
 def _load_holiday_dates(path: str | None) -> set:
@@ -27,6 +31,85 @@ def _load_holiday_dates(path: str | None) -> set:
                     if isinstance(item, str):
                         out.add(datetime.fromisoformat(f"{item}T00:00:00").date())
     return out
+
+
+def _task_zone(task: Task, default_timezone: str) -> ZoneInfo:
+    return ZoneInfo(task.timezone or default_timezone)
+
+
+def _normalize_datetime_for_zone(value: Optional[datetime], zone: ZoneInfo) -> Optional[datetime]:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=zone)
+    return value.astimezone(zone)
+
+
+def _normalize_now_for_task(now: Optional[datetime], task: Task, default_timezone: str) -> datetime:
+    zone = _task_zone(task, default_timezone)
+    if now is None:
+        return datetime.now(zone)
+    if now.tzinfo is None:
+        return now.replace(tzinfo=zone)
+    return now.astimezone(zone)
+
+
+def _task_start_date_end_cutoff(task: Task, default_timezone: str) -> Optional[datetime]:
+    zone = _task_zone(task, default_timezone)
+    end_dt = _normalize_datetime_for_zone(task.start_date_end, zone)
+    if end_dt is None:
+        return None
+    if not task.start_date_end_has_time:
+        return end_dt + timedelta(days=1)
+    return end_dt
+
+
+def _format_end_for_log(task: Task, default_timezone: str) -> str:
+    zone = _task_zone(task, default_timezone)
+    end_dt = _normalize_datetime_for_zone(task.start_date_end, zone)
+    if end_dt is None:
+        return "None"
+    if task.start_date_end_has_time:
+        return end_dt.isoformat()
+    return end_dt.date().isoformat()
+
+
+def _auto_finish_tasks_by_start_date_end(
+    *,
+    tasks: Iterable[Task],
+    default_timezone: str,
+    notion_writer: MyPlanNotionWriter,
+    commit: bool,
+    now: Optional[datetime],
+) -> int:
+    changed = 0
+    for task in tasks:
+        if task.status not in AUTO_FINISH_SOURCE_STATUSES:
+            continue
+        cutoff = _task_start_date_end_cutoff(task, default_timezone)
+        if cutoff is None:
+            continue
+        now_dt = _normalize_now_for_task(now, task, default_timezone)
+        if now_dt < cutoff:
+            continue
+
+        old_status = task.status
+        task.status = "Finished"
+        task.next_date = None
+        changed += 1
+
+        print(
+            f"[AUTO_FINISH] {task.title}: {old_status} -> Finished | "
+            f"Start Date end reached ({_format_end_for_log(task, default_timezone)})"
+        )
+
+        if commit:
+            notion_writer.update_task_core_fields(
+                task.page_id,
+                status="Finished",
+                next_date=None,
+            )
+    return changed
 
 
 def _parse_args() -> argparse.Namespace:
@@ -58,6 +141,15 @@ def main() -> None:
         holiday_dates=holiday_dates,
     )
     now = datetime.fromisoformat(args.now) if args.now else None
+
+    auto_finished_count = _auto_finish_tasks_by_start_date_end(
+        tasks=snapshot.tasks,
+        default_timezone=snapshot.default_timezone,
+        notion_writer=notion_writer,
+        commit=args.commit,
+        now=now,
+    )
+
     next_date_results = calc.compute_snapshot_next_dates(
         snapshot.tasks,
         now=now,
@@ -85,6 +177,7 @@ def main() -> None:
             notion_writer.update_task_next_date(item.page_id, item.new_next_date)
 
     print(f"\nNext-date results saved to: {next_date_path}")
+    print(f"Auto-finished rows by Start Date end: {auto_finished_count}")
     print(f"Changed Next Date rows: {changed}")
 
     syncer = TaskGoogleSyncer(notion_reader, notion_writer, google_client)

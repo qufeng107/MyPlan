@@ -32,6 +32,8 @@ class Task:
     status: Optional[str] = None
     reminder_min: Optional[float] = None
     start_date: Optional[datetime] = None
+    start_date_end: Optional[datetime] = None
+    start_date_end_has_time: bool = False
     next_date: Optional[datetime] = None
     last_synced_at: Optional[datetime] = None
     timezone: Optional[str] = None

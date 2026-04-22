@@ -25,6 +25,24 @@ class MyPlanNotionReader:
         return datetime.fromisoformat(start)
 
     @staticmethod
+    def _parse_date_part(value: Optional[dict[str, Any]], key: str) -> Optional[datetime]:
+        if not value:
+            return None
+        raw_value = value.get(key)
+        if not raw_value:
+            return None
+        return datetime.fromisoformat(raw_value)
+
+    @staticmethod
+    def _date_part_has_explicit_time(value: Optional[dict[str, Any]], key: str) -> bool:
+        if not value:
+            return False
+        raw_value = value.get(key)
+        if not isinstance(raw_value, str):
+            return False
+        return "T" in raw_value
+
+    @staticmethod
     def _parse_property(prop: dict[str, Any]) -> Any:
         prop_type = prop.get("type")
 
@@ -141,6 +159,7 @@ class MyPlanNotionReader:
                 key=lambda x: WEEKDAY_ORDER.index(x) if x in WEEKDAY_ORDER else 999,
             )
 
+            start_date_value = data.get("Start Date")
             task = Task(
                 page_id=data["page_id"],
                 title=str(data.get("Title") or ""),
@@ -151,7 +170,9 @@ class MyPlanNotionReader:
                 google_event_id=str(data.get("GoogleEventId") or ""),
                 status=data.get("Status"),
                 reminder_min=data.get("ReminderMin"),
-                start_date=self._parse_datetime(data.get("Start Date")),
+                start_date=self._parse_datetime(start_date_value),
+                start_date_end=self._parse_date_part(start_date_value, "end"),
+                start_date_end_has_time=self._date_part_has_explicit_time(start_date_value, "end"),
                 next_date=self._parse_datetime(data.get("Next Date")),
                 last_synced_at=self._parse_datetime(data.get("LastSyncedAt")),
                 timezone=data.get("Timezone") or None,
@@ -179,22 +200,16 @@ class MyPlanNotionReader:
         config_entries = self.read_config_entries()
         topics = self.read_topics()
         tasks = self.read_tasks()
-        leave = self.read_leave()
-
+        leave_entries = self.read_leave()
         default_timezone = self.fallback_timezone
         for entry in config_entries:
             if entry.key.strip().lower() == "timezone" and entry.value.strip():
                 default_timezone = entry.value.strip()
                 break
-
-        for task in tasks:
-            if not task.timezone:
-                task.timezone = default_timezone
-
         return MyPlanSnapshot(
             default_timezone=default_timezone,
             config=config_entries,
             topics=topics,
             tasks=tasks,
-            leave=leave,
+            leave=leave_entries,
         )
