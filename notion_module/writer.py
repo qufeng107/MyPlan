@@ -36,10 +36,6 @@ class MyPlanNotionWriter:
         return {"select": {"name": value} if value else None}
 
     @staticmethod
-    def _status(value: Optional[str]) -> dict[str, Any]:
-        return {"status": {"name": value} if value else None}
-
-    @staticmethod
     def _multi_select(values: list[str]) -> dict[str, Any]:
         return {"multi_select": [{"name": x} for x in values]}
 
@@ -83,7 +79,7 @@ class MyPlanNotionWriter:
         return self.update_page_properties(page_id, {"Timezone": self._select(timezone)})
 
     def update_task_status(self, page_id: str, status: str) -> dict[str, Any]:
-        return self.update_page_properties(page_id, {"Status": self._status(status)})
+        return self.update_page_properties(page_id, {"Status": self._select(status)})
 
     def update_task_record_text(self, page_id: str, text: str) -> dict[str, Any]:
         return self.update_page_properties(page_id, {"Records": self._rich_text(text)})
@@ -122,7 +118,7 @@ class MyPlanNotionWriter:
         if repeat_values is not _UNSET:
             properties["Repeat"] = self._multi_select(repeat_values or [])
         if status is not _UNSET:
-            properties["Status"] = self._status(status)
+            properties["Status"] = self._select(status)
         if records is not _UNSET:
             properties["Records"] = self._rich_text(records or "")
         if timezone is not _UNSET:

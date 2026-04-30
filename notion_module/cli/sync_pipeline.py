@@ -86,29 +86,43 @@ def _auto_finish_tasks_by_start_date_end(
     for task in tasks:
         if task.status not in AUTO_FINISH_SOURCE_STATUSES:
             continue
+
         cutoff = _task_start_date_end_cutoff(task, default_timezone)
         if cutoff is None:
             continue
+
         now_dt = _normalize_now_for_task(now, task, default_timezone)
         if now_dt < cutoff:
             continue
 
         old_status = task.status
+        old_next_date = task.next_date
+        end_for_log = _format_end_for_log(task, default_timezone)
+
+        if commit:
+            try:
+                notion_writer.update_task_core_fields(
+                    task.page_id,
+                    status="Finished",
+                    next_date=None,
+                )
+            except Exception as exc:
+                print(
+                    f"[AUTO_FINISH_ERROR] {task.title}: failed to update Notion | "
+                    f"target=Finished | Start Date end reached ({end_for_log}) | error={exc}"
+                )
+                task.status = old_status
+                task.next_date = old_next_date
+                continue
+
         task.status = "Finished"
         task.next_date = None
         changed += 1
 
         print(
             f"[AUTO_FINISH] {task.title}: {old_status} -> Finished | "
-            f"Start Date end reached ({_format_end_for_log(task, default_timezone)})"
+            f"Start Date end reached ({end_for_log})"
         )
-
-        if commit:
-            notion_writer.update_task_core_fields(
-                task.page_id,
-                status="Finished",
-                next_date=None,
-            )
     return changed
 
 
@@ -181,23 +195,24 @@ def main() -> None:
     print(f"Changed Next Date rows: {changed}")
 
     syncer = TaskGoogleSyncer(notion_reader, notion_writer, google_client)
-    sync_results = syncer.sync_tasks(
+    google_results = syncer.sync_tasks(
         commit=args.commit,
         delete_inactive=args.delete_inactive,
         cleanup_orphans=args.cleanup_orphans,
     )
 
-    sync_path = out_dir / "google_sync_results.json"
-    sync_path.write_text(
-        json.dumps([item.to_dict() for item in sync_results], ensure_ascii=False, indent=2),
+    google_sync_path = out_dir / "google_sync_results.json"
+    google_sync_path.write_text(
+        json.dumps([item.to_dict() for item in google_results], ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    for item in sync_results:
+
+    print(f"\nGoogle sync results saved to: {google_sync_path}")
+    for item in google_results:
         print(f"[{item.action.upper():<20}] {item.title} | {item.reason}")
 
-    print(f"\nGoogle sync results saved to: {sync_path}")
     if not args.commit:
-        print("Dry run only. Use --commit to actually write changes.")
+        print("\nDry run only. Use --commit to actually sync.")
 
 
 if __name__ == "__main__":
