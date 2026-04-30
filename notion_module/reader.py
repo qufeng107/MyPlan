@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
+from requests.exceptions import HTTPError
+
 from .client import NotionClient
 from .models import ConfigEntry, LeaveEntry, MyPlanSnapshot, Task, Topic
 
@@ -14,6 +16,27 @@ class MyPlanNotionReader:
     def __init__(self, client: NotionClient, fallback_timezone: str = "Europe/London") -> None:
         self.client = client
         self.fallback_timezone = fallback_timezone
+
+    @staticmethod
+    def _is_optional_data_source_error(exc: Exception) -> bool:
+        if not isinstance(exc, HTTPError):
+            return False
+        response = getattr(exc, "response", None)
+        if response is None:
+            return False
+        return response.status_code in {403, 404}
+
+    def _query_optional_rows(self, data_source_id: str, *, label: str) -> list[dict[str, Any]]:
+        try:
+            return self.client.query_all_rows(data_source_id)
+        except Exception as exc:
+            if self._is_optional_data_source_error(exc):
+                print(
+                    f"[OPTIONAL_DATA_SOURCE_SKIP] {label}: unable to query data source {data_source_id} | "
+                    f"error={exc}"
+                )
+                return []
+            raise
 
     @staticmethod
     def _parse_datetime(value: Optional[dict[str, Any]]) -> Optional[datetime]:
@@ -102,7 +125,7 @@ class MyPlanNotionReader:
         return entries
 
     def read_topics(self) -> list[Topic]:
-        rows = self.client.query_all_rows(self.client.env.topics_data_source_id)
+        rows = self._query_optional_rows(self.client.env.topics_data_source_id, label="Topics")
         topics: list[Topic] = []
         for row in rows:
             data = self._simplify_page(row)
@@ -116,7 +139,7 @@ class MyPlanNotionReader:
         return topics
 
     def read_leave(self) -> list[LeaveEntry]:
-        rows = self.client.query_all_rows(self.client.env.leave_data_source_id)
+        rows = self._query_optional_rows(self.client.env.leave_data_source_id, label="Leave")
         leave_rows: list[LeaveEntry] = []
         for row in rows:
             data = self._simplify_page(row)
@@ -134,9 +157,10 @@ class MyPlanNotionReader:
             )
         return leave_rows
 
-    def read_tasks(self) -> list[Task]:
+    def read_tasks(self, topic_map: Optional[dict[str, str]] = None) -> list[Task]:
         rows = self.client.query_all_rows(self.client.env.tasks_data_source_id)
-        topic_map = {t.page_id: t.title for t in self.read_topics()}
+        if topic_map is None:
+            topic_map = {t.page_id: t.title for t in self.read_topics()}
 
         tasks: list[Task] = []
         for row in rows:
@@ -199,7 +223,8 @@ class MyPlanNotionReader:
     def read_snapshot(self) -> MyPlanSnapshot:
         config_entries = self.read_config_entries()
         topics = self.read_topics()
-        tasks = self.read_tasks()
+        topic_map = {x.page_id: x.title for x in topics}
+        tasks = self.read_tasks(topic_map=topic_map)
         leave_entries = self.read_leave()
         default_timezone = self.fallback_timezone
         for entry in config_entries:
