@@ -199,6 +199,7 @@ def main() -> None:
         commit=args.commit,
         delete_inactive=args.delete_inactive,
         cleanup_orphans=args.cleanup_orphans,
+        snapshot=snapshot,
     )
 
     google_sync_path = out_dir / "google_sync_results.json"

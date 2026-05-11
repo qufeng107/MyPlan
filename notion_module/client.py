@@ -1,17 +1,29 @@
 from __future__ import annotations
 
+import time
 from typing import Any, Dict, Optional
 
 import requests
+from requests.exceptions import ConnectionError as RequestsConnectionError
+from requests.exceptions import HTTPError, ReadTimeout
 
 from .config import NotionEnvConfig
 
 
 class NotionClient:
-    def __init__(self, env: NotionEnvConfig, timeout: int = 30) -> None:
+    def __init__(
+        self,
+        env: NotionEnvConfig,
+        timeout: int | tuple[int, int] = (10, 60),
+        max_retries: int = 4,
+        retry_backoff_seconds: float = 1.5,
+    ) -> None:
         self.env = env
         self.timeout = timeout
+        self.max_retries = max(int(max_retries), 1)
+        self.retry_backoff_seconds = max(float(retry_backoff_seconds), 0.0)
         self.base_url = "https://api.notion.com/v1"
+        self.session = requests.Session()
 
     @property
     def headers(self) -> Dict[str, str]:
@@ -21,14 +33,77 @@ class NotionClient:
             "Content-Type": "application/json",
         }
 
+    @staticmethod
+    def _should_retry_http_error(exc: HTTPError) -> bool:
+        response = getattr(exc, "response", None)
+        if response is None:
+            return False
+        return response.status_code in {408, 409, 429, 500, 502, 503, 504}
+
+    def _sleep_before_retry(self, attempt: int, response: Optional[requests.Response] = None) -> None:
+        retry_after = None
+        if response is not None:
+            retry_after = response.headers.get("Retry-After")
+
+        if retry_after:
+            try:
+                seconds = max(float(retry_after), 0.0)
+            except Exception:
+                seconds = self.retry_backoff_seconds * (2 ** (attempt - 1))
+        else:
+            seconds = self.retry_backoff_seconds * (2 ** (attempt - 1))
+
+        if seconds > 0:
+            time.sleep(seconds)
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json_payload: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        url = f"{self.base_url}{path}"
+        last_exc: Optional[Exception] = None
+
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                resp = self.session.request(
+                    method=method,
+                    url=url,
+                    headers=self.headers,
+                    json=json_payload,
+                    timeout=self.timeout,
+                )
+                resp.raise_for_status()
+                return resp.json()
+            except (ReadTimeout, RequestsConnectionError) as exc:
+                last_exc = exc
+                if attempt >= self.max_retries:
+                    raise
+                print(
+                    f"[NOTION_RETRY] {method.upper()} {path} | attempt {attempt}/{self.max_retries} | "
+                    f"reason={exc.__class__.__name__}: {exc}"
+                )
+                self._sleep_before_retry(attempt)
+            except HTTPError as exc:
+                last_exc = exc
+                if not self._should_retry_http_error(exc) or attempt >= self.max_retries:
+                    raise
+                response = getattr(exc, "response", None)
+                status_code = response.status_code if response is not None else "unknown"
+                print(
+                    f"[NOTION_RETRY] {method.upper()} {path} | attempt {attempt}/{self.max_retries} | "
+                    f"status={status_code} | reason={exc}"
+                )
+                self._sleep_before_retry(attempt, response=response)
+
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError(f"Unexpected request failure without exception for {method} {path}")
+
     def retrieve_data_source(self, data_source_id: str) -> dict[str, Any]:
-        resp = requests.get(
-            f"{self.base_url}/data_sources/{data_source_id}",
-            headers=self.headers,
-            timeout=self.timeout,
-        )
-        resp.raise_for_status()
-        return resp.json()
+        return self._request("GET", f"/data_sources/{data_source_id}")
 
     def query_data_source(
         self,
@@ -47,14 +122,7 @@ class NotionClient:
         if sorts:
             payload["sorts"] = sorts
 
-        resp = requests.post(
-            f"{self.base_url}/data_sources/{data_source_id}/query",
-            headers=self.headers,
-            json=payload,
-            timeout=self.timeout,
-        )
-        resp.raise_for_status()
-        return resp.json()
+        return self._request("POST", f"/data_sources/{data_source_id}/query", json_payload=payload)
 
     def query_all_rows(
         self,
@@ -87,20 +155,7 @@ class NotionClient:
         if archived is not None:
             payload["archived"] = archived
 
-        resp = requests.patch(
-            f"{self.base_url}/pages/{page_id}",
-            headers=self.headers,
-            json=payload,
-            timeout=self.timeout,
-        )
-        resp.raise_for_status()
-        return resp.json()
+        return self._request("PATCH", f"/pages/{page_id}", json_payload=payload)
 
     def retrieve_page(self, page_id: str) -> dict[str, Any]:
-        resp = requests.get(
-            f"{self.base_url}/pages/{page_id}",
-            headers=self.headers,
-            timeout=self.timeout,
-        )
-        resp.raise_for_status()
-        return resp.json()
+        return self._request("GET", f"/pages/{page_id}")

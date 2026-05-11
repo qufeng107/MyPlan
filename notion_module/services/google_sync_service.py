@@ -200,8 +200,10 @@ class TaskGoogleSyncer:
         commit: bool = False,
         delete_inactive: bool = True,
         cleanup_orphans: bool = True,
+        snapshot = None,
     ) -> list[SyncResult]:
-        snapshot = self.notion_reader.read_snapshot()
+        if snapshot is None:
+            snapshot = self.notion_reader.read_snapshot()
         results: list[SyncResult] = []
 
         managed_events = self.google_client.list_managed_events()
